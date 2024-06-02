@@ -7,7 +7,7 @@ from calendar import monthrange
 from flask_cors import CORS  # Import CORS from flask_cors
 from flask import Flask, jsonify, request, render_template
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='template')
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 
