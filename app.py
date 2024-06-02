@@ -5,7 +5,7 @@ from datetime import datetime
 from urllib.parse import urlparse, parse_qs
 from calendar import monthrange
 from flask_cors import CORS  # Import CORS from flask_cors
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -80,6 +80,11 @@ def getEvents():
         return jsonify(output)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/")
+def home():
+    return render_template("HomePage.html")
 
 
 if __name__ == '__main__':
