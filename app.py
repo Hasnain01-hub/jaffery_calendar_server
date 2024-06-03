@@ -72,14 +72,54 @@ def scrape_calendar(url):
     return json_data
 
 
-@app.route('/api/getEvents', methods=['GET'])
+@app.route('/api/getEvents', methods=['POST', 'GET'])
 def getEvents():
     try:
-        url = 'https://hussainiat.com/calendar/calendar.asp?month=6&year=2024'
-        output = scrape_calendar(url)
+        # curr_date = "01/05/2024"
+        # req_date = "03/06/2025"
+        curr_date = request.json["curr_date"]
+        req_date = request.json["req_date"]
+        result = requested_months(curr_date, req_date)
+        output = []
+        for item in result:
+            url = f'https://hussainiat.com/calendar/calendar.asp?month={item["month"]}&year={item["year"]}'
+            output.append(scrape_calendar(url))
         return jsonify(output)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+def requested_months(curr_date, req_date):
+    # Parse the current and required dates
+    curr_date_obj = datetime.strptime(curr_date, '%d/%m/%Y')
+    req_date_obj = datetime.strptime(req_date, '%d/%m/%Y')
+
+    # Initialize the results list and current tracking variables
+    combine_date = []
+    curr_month = curr_date_obj.month
+    curr_year = curr_date_obj.year
+
+    # Extract month and year from required date
+    req_month = req_date_obj.month
+    req_year = req_date_obj.year
+
+    # Iterate from the current year to the required year
+    while curr_year < req_year or (curr_year == req_year and curr_month <= req_month):
+        combine_date.append({"month": curr_month, "year": curr_year})
+
+        # Increment month and adjust year if needed
+        if curr_month == 12:
+            curr_month = 1
+            curr_year += 1
+        else:
+            curr_month += 1
+
+    # Handle the scenario where current year equals required year and the months range within the same year
+    if curr_year == req_year:
+        for i in range(curr_month, req_month + 1):
+            combine_date.append({"month": i, "year": req_year})
+
+    return combine_date
 
 
 @app.route("/")
