@@ -6,6 +6,9 @@ from urllib.parse import urlparse, parse_qs
 from calendar import monthrange
 from flask_cors import CORS  # Import CORS from flask_cors
 from flask import Flask, jsonify, request, render_template
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
 
 app = Flask(__name__, template_folder='template')
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -131,28 +134,74 @@ def scrape_month_calendar(url):
     return json_data
 
 
-@app.route('/api/getEvents', methods=['POST', 'GET'])
+@app.route('/api/addCalendar', methods=['POST', 'GET'])
 def getEvents():
     try:
         # curr_date = "01/05/2024"
         # req_date = "03/06/2025"
         curr_date = request.json["curr_date"]
         req_date = request.json["req_date"]
+        provider_token = request.headers.get('Authorization').split(' ')[1]
         result = requested_months(curr_date, req_date)
-        output = []
+        credentials = Credentials(token=provider_token)
+        if not credentials or not credentials.valid:
+            if credentials and credentials.expired and credentials.refresh_token:
+                credentials.refresh(Request())
+        else:
+            return jsonify({"error": "Invalid credentials"}), 401
         for item in result:
             url = f'https://hussainiat.com/calendar/calendar.asp?month={item["month"]}&year={item["year"]}'
-            output.append(scrape_calendar(url))
-        return jsonify(output)
+            out = scrape_calendar(url)
+            add_event(out, credentials)
+
+        return jsonify({"status": "success", "message": "Events added successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/api/getCalendar', methods=['POST'])
+def add_event(events, credentials):
+
+    event_date = event_data['date']  # Expected format: 'YYYY-MM-DD'
+    event_time = "9:00"  # Expected format: 'HH:MM'
+
+    service = build('calendar', 'v3', credentials=credentials)
+    start_datetime_str = f"{event_date}T{event_time}:00"
+    start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%dT%H:%M:%S')
+
+    end_datetime = start_datetime + datetime.timedelta(hours=1)
+
+    event_body = {
+        'summary': event['event'],
+        'start': {
+            'dateTime': start_datetime.isoformat(),
+            'timeZone': 'UTC',
+        },
+        'end': {
+            'dateTime': event_date,
+            'timeZone': 'UTC',
+        },
+        'reminders': {
+            'useDefault': False,
+            'overrides': [
+                # Email notification at 9:00 AM
+                {'method': 'email', 'minutes': int(
+                    (start_datetime - start_datetime.replace(hour=9, minute=0)).total_seconds() // 60)}
+
+            ],
+        },
+    }
+    # Add the event to the calendar
+    created_event = service.events().insert(
+        calendarId='primary', body=event_body).execute()
+    created_events.append(created_event)
+
+
+@ app.route('/api/getCalendar', methods=['POST'])
 def getCalendar():
     try:
         req_date = request.json["req_month"]
         req_year = request.json["req_year"]
+
         url = f'https://hussainiat.com/calendar/calendar.asp?month={req_date}&year={req_year}'
         output = scrape_month_calendar(url)
         return jsonify(output)
@@ -193,7 +242,7 @@ def requested_months(curr_date, req_date):
     return combine_date
 
 
-@app.route("/")
+@ app.route("/")
 def home():
     return render_template("HomePage.html")
 
