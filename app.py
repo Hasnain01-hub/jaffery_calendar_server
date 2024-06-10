@@ -134,7 +134,7 @@ def scrape_month_calendar(url):
     return json_data
 
 
-@app.route('/api/addCalendar', methods=['POST', 'GET'])
+@app.route('/api/addCalendar', methods=['POST'])
 def getEvents():
     try:
         # curr_date = "01/05/2024"
