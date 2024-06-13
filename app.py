@@ -1,14 +1,14 @@
 import requests
 from bs4 import BeautifulSoup
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse, parse_qs
 from calendar import monthrange
 from flask_cors import CORS  # Import CORS from flask_cors
 from flask import Flask, jsonify, request, render_template
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-
+from math import ceil
 
 app = Flask(__name__, template_folder='template')
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -141,59 +141,77 @@ def getEvents():
         # req_date = "03/06/2025"
         curr_date = request.json["curr_date"]
         req_date = request.json["req_date"]
+        refresh_token = request.json["refresh_token"]
         provider_token = request.headers.get('Authorization').split(' ')[1]
+        print(refresh_token)
         result = requested_months(curr_date, req_date)
-        credentials = Credentials(token=provider_token)
-        if not credentials or not credentials.valid:
-            if credentials and credentials.expired and credentials.refresh_token:
-                credentials.refresh(Request())
-        else:
-            return jsonify({"error": "Invalid credentials"}), 401
+        credentials = Credentials(
+            token=provider_token, refresh_token=refresh_token, scopes=['https://www.googleapis.com/auth/calendar'])
+        print(credentials)
+        print(credentials)
+        # if not credentials or not credentials.valid:
+        #     if credentials and credentials.expired and credentials.refresh_token:
+        #         credentials.refresh(Request())
+        # else:
+        #     return jsonify({"error": "Invalid credentials"}), 401
         for item in result:
             url = f'https://hussainiat.com/calendar/calendar.asp?month={item["month"]}&year={item["year"]}'
             out = scrape_calendar(url)
-            add_event(out, credentials)
-
+            month_event_data = json.loads(out)
+            print(type(month_event_data))
+            add_event(month_event_data, credentials)
+        print("status")
         return jsonify({"status": "success", "message": "Events added successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-def add_event(events, credentials):
-
-    event_date = event_data['date']  # Expected format: 'YYYY-MM-DD'
-    event_time = "9:00"  # Expected format: 'HH:MM'
-
+def add_event(month_event_data, credentials):
     service = build('calendar', 'v3', credentials=credentials)
-    start_datetime_str = f"{event_date}T{event_time}:00"
-    start_datetime = datetime.strptime(start_datetime_str, '%Y-%m-%dT%H:%M:%S')
+    print("events", month_event_data)
+    for events in month_event_data:
+        event_date = events['date']  # Expected format: 'YYYY-MM-DD'
+        date_obj = datetime.strptime(event_date, '%d/%m/%Y')
+        # Convert to desired format 'YYYY-MM-DD'
+        formatted_event_date = date_obj.strftime('%Y-%m-%d')
+        event_time = '09:30'  # Expected format: 'HH:MM'
 
-    end_datetime = start_datetime + datetime.timedelta(hours=1)
+        start_datetime_str = f"{formatted_event_date}T{event_time}:00"
+        start_datetime = datetime.strptime(
+            start_datetime_str, '%Y-%m-%dT%H:%M:%S')
+        formatted_datetime_str = start_datetime.strftime("%Y-%m-%dT%H:%M:%S")
+        time_to_bell = int(
+            (start_datetime - start_datetime.replace(hour=9, minute=0)).total_seconds() // 60)
 
-    event_body = {
-        'summary': event['event'],
-        'start': {
-            'dateTime': start_datetime.isoformat(),
-            'timeZone': 'UTC',
-        },
-        'end': {
-            'dateTime': event_date,
-            'timeZone': 'UTC',
-        },
-        'reminders': {
-            'useDefault': False,
-            'overrides': [
-                # Email notification at 9:00 AM
-                {'method': 'email', 'minutes': int(
-                    (start_datetime - start_datetime.replace(hour=9, minute=0)).total_seconds() // 60)}
-
-            ],
-        },
-    }
-    # Add the event to the calendar
-    created_event = service.events().insert(
-        calendarId='primary', body=event_body).execute()
-    created_events.append(created_event)
+        # time_to_bell.strftime("%Y-%m-%dT%H:%M:%S")
+        print(time_to_bell)
+        # end_datetime = start_datetime + timedelta(hours=1)
+        event_body = {
+            'summary': events['event'],
+            'start': {
+                'date': formatted_event_date,
+                'timeZone': 'UTC',
+            },
+            'end': {
+                'date': formatted_event_date,
+                'timeZone': 'UTC',
+            },
+            'reminders': {
+                'useDefault': False,
+                'overrides': [
+                    # Email notification at 9:00 AM
+                    {'method': 'email', 'minutes': time_to_bell}
+                ],
+            },
+        }
+        try:
+            # Add the event to the calendar
+            created_event = service.events().insert(
+                calendarId='primary', body=event_body).execute()
+            print('Event created: %s' % (created_event.get('htmlLink')))
+        except Exception as e:
+            print(f'An error occurred: {e}')
+            continue  # Continue to the next event
 
 
 @ app.route('/api/getCalendar', methods=['POST'])
