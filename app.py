@@ -143,11 +143,11 @@ def getEvents():
         req_date = request.json["req_date"]
         refresh_token = request.json["refresh_token"]
         provider_token = request.headers.get('Authorization').split(' ')[1]
-        print(refresh_token)
+        print(curr_date, req_date)
         result = requested_months(curr_date, req_date)
+        print(result)
         credentials = Credentials(
             token=provider_token, refresh_token=refresh_token, scopes=['https://www.googleapis.com/auth/calendar'])
-        print(credentials)
         print(credentials)
         # if not credentials or not credentials.valid:
         #     if credentials and credentials.expired and credentials.refresh_token:
@@ -158,7 +158,7 @@ def getEvents():
             url = f'https://hussainiat.com/calendar/calendar.asp?month={item["month"]}&year={item["year"]}'
             out = scrape_calendar(url)
             month_event_data = json.loads(out)
-            print(type(month_event_data))
+            print("month_event_data", month_event_data)
             add_event(month_event_data, credentials)
         print("status")
         return jsonify({"status": "success", "message": "Events added successfully"})
@@ -209,6 +209,7 @@ def add_event(month_event_data, credentials):
             created_event = service.events().insert(
                 calendarId='primary', body=event_body).execute()
             print('Event created: %s' % (created_event.get('htmlLink')))
+
         except Exception as e:
             print(f'An error occurred: {e}')
             continue  # Continue to the next event
@@ -229,8 +230,8 @@ def getCalendar():
 
 def requested_months(curr_date, req_date):
     # Parse the current and required dates
-    curr_date_obj = datetime.strptime(curr_date, '%d/%m/%Y')
-    req_date_obj = datetime.strptime(req_date, '%d/%m/%Y')
+    curr_date_obj = datetime.strptime(curr_date, '%Y/%m/%d')
+    req_date_obj = datetime.strptime(req_date, '%Y/%m/%d')
 
     # Initialize the results list and current tracking variables
     combine_date = []
