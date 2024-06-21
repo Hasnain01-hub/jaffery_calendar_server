@@ -23,23 +23,45 @@ def scrape_calendar(url):
     # Default to July if not specified
     month = int(query_params.get('month', [7])[0])
 
-    # Send a GET request to the URL
     headersList = {
         "Accept": "*/*",
         "User-Agent": "Thunder Client (https://www.thunderclient.com)"
     }
     payload = ""
-    response = requests.request("GET", url, data=payload,  headers=headersList)
+
+    # Function to make the request with retries
+    def make_request_with_retries(url, headers, payload, max_retries=4):
+        retries = 0
+        while retries < max_retries:
+            try:
+                response = requests.request(
+                    "GET", url, data=payload, headers=headers)
+                response.raise_for_status()  # Raise HTTPError for bad responses
+                return response
+            except requests.exceptions.HTTPError as e:
+                if response.status_code == 504:  # Handle 504 specifically
+                    retries += 1
+                    wait_time = 2 ** retries  # Exponential backoff
+                    print(
+                        f"504 error encountered. Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    raise e
+        raise Exception(
+            f"Failed to retrieve data after {max_retries} attempts")
+
+    # Send a GET request to the URL with retries
+    response = make_request_with_retries(url, headersList, payload)
+
     # Parse the HTML content
     soup = BeautifulSoup(response.text, 'html.parser')
-    # print(soup)
+
     # Find the table that contains the calendar data
     table = soup.find('table', bordercolor='#C0C0C0')
     rows = table.find_all('tr')[1:]  # Skip the header row
 
     # Initialize a list to hold the data
     events = []
-    # event_id = 1
 
     # Get the maximum valid day for the given month and year
     max_day = monthrange(year, month)[1]
@@ -61,14 +83,12 @@ def scrape_calendar(url):
                 event_texts = col.find_all('b')
                 for event_text in event_texts:
                     event = {
-                        # 'id': event_id,
                         'date': formatted_date,
                         'day': weekday,
                         'event': event_text.get_text(strip=True)
                     }
                     if event not in events:  # Ensure unique events
                         events.append(event)
-                        # event_id += 1
 
     # Convert the list of events to JSON
     json_data = json.dumps(events, indent=2)
