@@ -30,7 +30,7 @@ def scrape_calendar(url):
     payload = ""
 
     # Function to make the request with retries
-    def make_request_with_retries(url, headers, payload, max_retries=4):
+    def make_request_with_retries(url, headers, payload, max_retries=5):
         retries = 0
         while retries < max_retries:
             try:
