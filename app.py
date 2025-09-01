@@ -35,7 +35,7 @@ def scrape_calendar(url):
         while retries < max_retries:
             try:
                 response = requests.request(
-                    "GET", url, data=payload, headers=headers)
+                    "GET", url, data=payload, headers=headers, verify=False)
                 response.raise_for_status()  # Raise HTTPError for bad responses
                 return response
             except requests.exceptions.HTTPError as e:
